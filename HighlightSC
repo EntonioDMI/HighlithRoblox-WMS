@@ -1,3 +1,10 @@
+-- Check if the script has already been executed
+if _G.HighlightScriptExecuted then
+    return
+end
+
+_G.HighlightScriptExecuted = true
+
 local TweenService = game:GetService("TweenService")
 
 local function startHighlighting()
