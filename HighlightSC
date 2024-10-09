@@ -1,105 +1,124 @@
--- Check if the script has already been executed
-if _G.HighlightScriptExecuted then
-    return
-end
-
-_G.HighlightScriptExecuted = true
-
 local TweenService = game:GetService("TweenService")
 
-local function startHighlighting()
-    local settings = {
-        DefaultColor = Color3.fromRGB(255, 255, 0),
-        HoverColor = Color3.fromRGB(255, 0, 0),
-        FillTransparency = 0.5,
-        OutlineTransparency = 0.3,
-        RainbowEnabled = true,
-        UpdateInterval = 0.1,
-        RainbowSpeed = 1,
-        HoverTweenTime = 0.3
-    }
+-- Check if the script has already been injected
+if not _G.HighlightScriptInjected then
+    -- Mark the script as injected
+    _G.HighlightScriptInjected = true
 
-    local players = game.Players
-    local localPlayer = players.LocalPlayer
+    -- Get the local player
+    local localPlayer = game.Players.LocalPlayer
     local mouse = localPlayer:GetMouse()
-    local currentHoveredCharacter = nil
-    local rainbowTime = 0
+    local currentHover = nil
 
-    local function createOrUpdateHighlight(character, color)
-        local highlight = character:FindFirstChildOfClass("Highlight")
-        if not highlight then
-            highlight = Instance.new("Highlight")
-            highlight.Adornee = character
-            highlight.Parent = character
+    -- Function to create a highlight
+    local function createHighlight(character)
+        local highlight = Instance.new("Highlight")
+        highlight.Adornee = character
+        highlight.FillColor = _G.highlightColor
+        highlight.OutlineColor = _G.outlineColor
+        highlight.FillTransparency = _G.fillTransparency
+        highlight.OutlineTransparency = _G.outlineTransparency
+        highlight.Parent = character
+        return highlight
+    end
+
+    -- Function to update highlight colors
+    local function updateHighlightColors(highlight, fillColor, outlineColor)
+        local tweenInfo = TweenInfo.new(hoverTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(highlight, tweenInfo, {
+            FillColor = fillColor,
+            OutlineColor = outlineColor
+        })
+        tween:Play()
+    end
+
+    -- Function to apply hover effect
+    local function applyHoverEffect(character)
+        if character and character ~= currentHover then
+            if currentHover then
+                -- Reset previous hover highlight
+                local prevHighlight = currentHover:FindFirstChildOfClass("Highlight")
+                if prevHighlight then
+                    updateHighlightColors(prevHighlight, _G.highlightColor, _G.outlineColor)
+                end
+            end
+
+            -- Apply new hover highlight
+            local highlight = character:FindFirstChildOfClass("Highlight") or createHighlight(character)
+            updateHighlightColors(highlight, hoverColor, hoverColor)
+            currentHover = character
         end
-        highlight.FillColor = color or settings.DefaultColor
-        highlight.FillTransparency = settings.FillTransparency
-        highlight.OutlineTransparency = settings.OutlineTransparency
     end
 
-    local function getRainbowColor(t)
-        local r = math.sin(t * settings.RainbowSpeed) * 127 + 128
-        local g = math.sin(t * settings.RainbowSpeed + 2) * 127 + 128
-        local b = math.sin(t * settings.RainbowSpeed + 4) * 127 + 128
-        return Color3.fromRGB(r, g, b)
-    end
+    -- Function to handle rainbow effect
+    local function applyRainbowEffect()
+        local colors = {
+            Color3.fromRGB(255, 0, 0),   -- Red
+            Color3.fromRGB(255, 127, 0), -- Orange
+            Color3.fromRGB(255, 255, 0), -- Yellow
+            Color3.fromRGB(0, 255, 0),   -- Green
+            Color3.fromRGB(0, 255, 255), -- Cyan
+            Color3.fromRGB(0, 0, 255),   -- Blue
+            Color3.fromRGB(139, 0, 255), -- Purple
+            Color3.fromRGB(255, 0, 255), -- Magenta
+            Color3.fromRGB(255, 20, 147) -- Deep Pink
+        }
+        local index = 1
 
-    local function tweenToColor(character, targetColor)
-        local highlight = character:FindFirstChildOfClass("Highlight")
-        if highlight then
-            local tweenInfo = TweenInfo.new(settings.HoverTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            local goal = {FillColor = targetColor}
-            TweenService:Create(highlight, tweenInfo, goal):Play()
-        end
-    end
+        while _G.rainbowColor and _G.highlightEnabled do
+            local currentColor = colors[index]
+            local nextColor = colors[index % #colors + 1]
 
-    local function onPlayerAdded(player)
-        if player == localPlayer then return end
+            for t = 0, 1, _G.step / _G.transitionTime do
+                if not _G.rainbowColor or not _G.highlightEnabled then
+                    return
+                end
 
-        local function onCharacterAdded(character)
-            createOrUpdateHighlight(character)
-        end
+                _G.highlightColor = currentColor:Lerp(nextColor, t)
 
-        if player.Character then
-            onCharacterAdded(player.Character)
-        end
-        player.CharacterAdded:Connect(onCharacterAdded)
-    end
-
-    players.PlayerAdded:Connect(onPlayerAdded)
-
-    for _, player in ipairs(players:GetPlayers()) do
-        onPlayerAdded(player)
-    end
-
-    task.spawn(function()
-        while true do
-            for _, player in ipairs(players:GetPlayers()) do
-                if player ~= localPlayer then
-                    local character = workspace:FindFirstChild(player.Name)
-                    if character then
-                        if mouse.Target and mouse.Target:IsDescendantOf(character) then
-                            if currentHoveredCharacter ~= character then
-                                currentHoveredCharacter = character
-                                tweenToColor(character, settings.HoverColor)
-                            end
-                        else
-                            if currentHoveredCharacter == character then
-                                currentHoveredCharacter = nil
-                            end
-                            if settings.RainbowEnabled then
-                                tweenToColor(character, getRainbowColor(rainbowTime))
-                            else
-                                tweenToColor(character, settings.DefaultColor)
-                            end
+                -- Update all highlights with new color
+                for _, player in pairs(game.Players:GetPlayers()) do
+                    if player ~= localPlayer then
+                        local character = player.Character
+                        if character and character ~= currentHover then
+                            local highlight = character:FindFirstChildOfClass("Highlight") or createHighlight(character)
+                            updateHighlightColors(highlight, _G.highlightColor, _G.outlineColor)
                         end
                     end
                 end
+                wait(_G.step)
             end
-            rainbowTime = rainbowTime + settings.UpdateInterval
-            task.wait(settings.UpdateInterval)
+
+            index = index % #colors + 1
+        end
+    end
+
+    -- Main loop for hover detection
+    spawn(function()
+        while _G.highlightEnabled do
+            local target = mouse.Target
+            if target and target.Parent and game.Players:GetPlayerFromCharacter(target.Parent) then
+                applyHoverEffect(target.Parent)
+            else
+                currentHover = nil
+            end
+            wait(0.1)
+        end
+
+        -- Reset all highlights when disabled
+        for _, player in pairs(game.Players:GetPlayers()) do
+            if player ~= localPlayer then
+                local character = player.Character
+                if character then
+                    local highlight = character:FindFirstChildOfClass("Highlight")
+                    if highlight then
+                        highlight:Destroy()
+                    end
+                end
+            end
         end
     end)
-end
 
-startHighlighting()
+    -- Start rainbow effect
+    spawn(applyRainbowEffect)
+end
